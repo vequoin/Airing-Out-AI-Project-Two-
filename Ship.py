@@ -7,7 +7,7 @@ class Ship:
         self.name = "Archaeopteryx"  # Assigns a name to the ship.
         self.D = D  # Sets the dimension of the ship.
         self.ship = self.generate_ship()  # Generates the ship's structure.
-        self.fire_instance = None  # Initializes a variable for tracking fire on the ship.
+        self.leaks = []  # Initializes a list storing coordinates of all leaks on the ship.
         self.open_cells = self.get_open_cells()  # Gets a list of open cells on the ship.
 
     def generate_ship(self):
