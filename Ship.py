@@ -79,6 +79,25 @@ class Ship:
     def get_length(self):
         """Returns the dimension of the ship."""
         return self.D
+
+
+    def find_nearest_open_center(self):
+        center_coords = [(24, 24), (25, 24), (24, 25), (25, 25)]
+
+        # Check if any of these center coordinates are open
+        for coord in center_coords:
+            if self.ship.ship[coord[0]][coord[1]] == 0:
+                return coord
+
+        # If none of the center cells are open, spiral outwards to find the nearest open cell
+        for layer in range(1, max(self.get_length, self.get_length) // 2):
+            for i in range(-layer, layer + 1):
+                for j in range(-layer, layer + 1):
+                    x, y = center_coords[0][0] + i, center_coords[0][1] + j
+                    if 0 <= x < self.get_length and 0 <= y < self.get_length:
+                        if self.ship[x][y] == 0:  # If cell is open
+                            return (x, y)
+        return None  # If no open cell is found  
     
     def __str__(self):
         """Returns a string representation of the ship's structure."""
