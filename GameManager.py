@@ -2,6 +2,7 @@ import random
 from collections import deque
 from Ship import Ship
 from bot import Bot
+from prob_strategies import Strategy3Bot
 
 class GameManager:
     def __init__(self, ship_size,bot_strategy, k):
@@ -38,7 +39,8 @@ class GameManager:
         
         #self.knowledge_grid = [['UNKNOWN' for _ in range(ship_size)] for _ in range(ship_size)]
         self.knowledge_grid = [['#' if cell == 1 else 'UNKNOWN' for cell in row] for row in self.ship.ship]
-        self.initialize_leaks()
+        self.isleak = self.initialize_leaks()
+        self.no_leaks = []
         
     
      
@@ -50,8 +52,10 @@ class GameManager:
         num_leaks = 2 if self.bot_strategy in range(5, 10) else 1
         for _ in range(num_leaks):
             leak_position = self.get_leak_position()
+            if not leak_position:
+                return False
             self.leaks.append(leak_position)
-      
+        return True
             
     def get_leak_position(self):
     # Extract bot's x and y coordinates
@@ -72,17 +76,18 @@ class GameManager:
                    for y in range(upper_bound, lower_bound + 1) 
                    if (x, y) in all_open_cells
         }
-        print("All open cells:", all_open_cells)
-        print("Detection square cells:", detection_square_cells)
 
 
         # Subtract detection square cells from all open cells to get potential leak positions
         potential_leak_positions = all_open_cells - detection_square_cells
-        print(potential_leak_positions)
-
+        if potential_leak_positions:
         # Randomly select a leak position
-        leak_position = random.choice(list(potential_leak_positions))
-        return leak_position
+            leak_position = random.choice(list(potential_leak_positions))
+            return leak_position
+        else:
+            # Handle the case where there are no potential leak positions
+            # For example, return None or raise a custom exception
+            return None
 
         
 
@@ -101,8 +106,7 @@ class GameManager:
             return sensed_grid
         else:
             for cell in sensed_grid:
-                if self.knowledge_grid[cell[0]][cell[1]] == "UNKNOWN":
-                    self.knowledge_grid[cell[0]][cell[1]] = "NO LEAK"
+                self.knowledge_grid[cell[0]][cell[1]] = "NO LEAK"
             return None
         
         
@@ -152,22 +156,24 @@ class GameManager:
 
         while game_is_on:
             print("\n")
-            print(self)
-            print("\n")
-            print(self.bot.position)
-            Moves += 1
+            #print(self)
+            #print("\n")
+            #print(self.bot.position)
+            print(f"Moves is: {Moves}")
             
             if self.bot.position == self.leaks[0]:
+                Moves += 1
                 print("Bot has patched the leak")
                 game_is_on = False
                 break
             
-            print(curr_path)
+            #print(curr_path)
             
             # If bot detected a leak, move to the nearest MIGHT_HAVE_LEAK cell
             if curr_path:
                 next_move = curr_path.pop(0)
                 self.bot.move(next_move)
+                Moves += 1
                 self.knowledge_grid[next_move[0]][next_move[1]] = "NO LEAK"
                 continue
             
@@ -181,12 +187,13 @@ class GameManager:
                 #if sensed is None:
                     #sensed = set()
                 sensed = self.sense()
+                Moves += 1
                 if sensed:
                     curr_path = self.find_path_to_nearest_cell_with_status(self.bot.position, "MIGHT_HAVE_LEAK")
             # If no leak is detected, move to the nearest UNKNOWN cell
                 else:
-                    print(f"sensed is: {sensed}")
-                    print("not sensed")
+                    #print(f"sensed is: {sensed}")
+                    #print("not sensed")
                     curr_path = self.find_path_to_nearest_cell_with_status(self.bot.position, "UNKNOWN")   
         return Moves
     
@@ -198,7 +205,9 @@ class GameManager:
 
         while queue:
             (x, y), path = queue.pop(0)
+            #print(f"Visiting: {(x, y)} with path: {path}")  # Debug print
             if self.knowledge_grid[x][y] == target_status:
+                #print(f"Found target at: {(x, y)} with path: {path}")
                 return path
 
             # Add unvisited neighbors to the queue
@@ -207,7 +216,7 @@ class GameManager:
                     new_path = path + [neighbors]
                     queue.append((neighbors, new_path))
                     visited.add(neighbors)
-
+        #print(f"No path found from {start_position} to a cell with status '{target_status}'")
         return []  # Return an empty list if no cell with desired status is found
                    
     
@@ -347,34 +356,25 @@ class GameManager:
 
         # Return the list of edge points
         return edges
-  
-    def nearest_neighbor(self, start, points, visited):
-        unvisited = set(points) - set(visited)
-        tour = [start]
-        current_point = start
-
-        while unvisited:
-            next_point = min(unvisited, key=lambda point: self.manhattan_distance(current_point, point))
-            tour.append(next_point)
-            unvisited.remove(next_point)
-            current_point = next_point
-
-        return tour
     
     
     def nearest_neighbor(self, start, points, visited):
-    # Filter out the visited points first
-        unvisited = set(points) - set(visited)
-        # Start with the current point
-        current_point = start
+        unvisited = set(points) - visited
+        if not unvisited:
+            return None  # All points have been visited.
 
-        if unvisited:
-            # Find the nearest unvisited point
-            next_point = min(unvisited, key=lambda point: self.manhattan_distance(current_point, point))
-            return next_point
-        else:
-            # If there are no unvisited points, return None or some indication that all points have been visited
-            return None
+        # Debug: Output the current state for analysis.
+        #print(f"Current position: {start}, Unvisited: {unvisited}, Visited: {visited}")
+
+        next_point = min(unvisited, key=lambda point: self.manhattan_distance(start, point))
+
+        # Debug: Check if next_point was already visited (which should not be the case).
+        if next_point in visited:
+            #print(f"ERROR: Next point {next_point} was already visited. Current path: {self.curr_path}")
+            raise Exception("Next point was already visited")
+
+        return next_point
+
 
     
     def strategy_two(self):
@@ -383,53 +383,114 @@ class GameManager:
         curr_path = []
         # If the detection range is large, start from the center
         total_moves = 0
-        visited = set()
         
         strategic_points = self.get_strategic_points()
         edge_locater = 0
         edges = []
         sensed = self.sense()
+        initial_target_reached = False
+        steps = 0
+        target = strategic_points.pop(0)
         
         while game_is_on:
-            print(f"sensed is: {sensed}")
-            print(f"curr_path is: {curr_path}")
-            print(total_moves)
-            print(self)
-            print("\n")
-            if self.k > detection_threshold:
+            #print(f"sensed is: {sensed}")
+            #print(f"curr_path is: {curr_path}")
+            print(f"total_moves are: {total_moves}")
+            print(f"bot position is: {self.bot.position}")
+            steps += 1
+            #print(self)
+            if total_moves > 500:
+                print(f"curr_path is: {curr_path}")
+                print(f"bot position is: {self.bot.position}")
+                print(f"sensed is: {sensed}")
+                print(self)
+                user = input("Press Enter....")
+            while not initial_target_reached:
+                if self.bot.position == target:
+                    initial_target_reached = True
+                if not curr_path:
+                    curr_path = self.find_path_to_edge(self.bot.position, target)
+                elif curr_path:
+                    next_move = curr_path.pop(0)
+                    self.bot.move(next_move)
+                    self.knowledge_grid[next_move[0]][next_move[1]] = "NO LEAK"
+                    total_moves += 1
+                    steps += 1
+                    if steps % (2*self.k +1) == 0:
+                        sensed = self.sense()
+                        total_moves += 1
+                        if sensed:
+                            curr_path = []
+                            initial_target_reached = True
+                            break
+            #print(f"curr_path after loop: {curr_path}")
+            #m = input("Breakpoint....")
+            if self.k >= detection_threshold:
+                #print(type(curr_path))
+                #print(curr_path)
                 if self.bot.position == self.leaks[0]:
+                    #n = input("Bot is here...")
+                    print("Bot has patched the leak")
                     game_is_on = False
                     return total_moves
-                if curr_path:
+                if curr_path and not sensed:
+                        if steps % (2*self.k + 1) == 0:
+                            sensed = self.sense()
+                            total_moves += 1
+                            if sensed:
+                                edges = self.infer_edges()
+                                curr_path = self.find_path_to_edge(self.bot.position, edges[edge_locater])
+                                print(f"curr_path after edge locator: {curr_path}")
+                        if curr_path:
+                            print(curr_path)
+                            next_move = curr_path.pop(0)
+                            self.knowledge_grid[next_move[0]][next_move[1]] = "NO LEAK"
+                            self.bot.move(next_move)
+                            total_moves += 1
+                            continue
+                if sensed:
+                    print(f"length of edges: {len(edges)}")
+                    #m = input("Have sensed...")
+                    if curr_path:
                         next_move = curr_path.pop(0)
                         self.knowledge_grid[next_move[0]][next_move[1]] = "NO LEAK"
                         self.bot.move(next_move)
                         total_moves += 1
-                        continue
-                if not curr_path and not sensed:
-                    sensed = self.sense()
-                    total_moves += 1
-                    if not sensed:
-                        #next_target = self.nearest_neighbor(self.bot.position, strategic_points, visited)
-                        next_target = strategic_points.pop(0)
-                        if next_target:
-                            visited.add(next_target)  # Add the next target to visited
-                            curr_path = self.find_path_to_edge(self.bot.position, next_target)
-                    elif sensed:
+                    elif not edges:
                         edges = self.infer_edges()
                         curr_path = self.find_path_to_edge(self.bot.position, edges[edge_locater])
-                elif sensed and not curr_path:
-                    new_sensed = self.sense()
-                    if new_sensed:
-                        curr_path = self.find_path_to_nearest_cell_with_status(self.bot.position,"MIGHT_HAVE_LEAK")
                     else:
-                        edge_locater += 1
-                        curr_path = self.find_path_to_edge(self.bot.position,edges[edge_locater])       
+                        new_sensed = self.sense()
+                        if new_sensed:
+                            if self.leaks[0] not in new_sensed:
+                                print("not in sensed")
+                                #k = input("Enter....")
+                            curr_path = self.find_path_to_nearest_cell_with_status(self.bot.position,"MIGHT_HAVE_LEAK")
+                        else:
+                            print(f"current edge number: {edge_locater}")
+                            print(new_sensed)
+                            if self.leaks[0] in sensed:
+                                print("in sensed")
+                            if edge_locater >= len(edges):
+                                print(f" length of egdes: {len(edges)}")
+                                #m = input("Edge Locator Breached!")
+                            curr_path = self.find_path_to_edge(self.bot.position,edges[edge_locater])
+                            edge_locater += 1
+                if not sensed and not curr_path:
+                    if strategic_points:
+                        point = strategic_points.pop(0)
+                        self.find_path_to_edge(self.bot.position, point)
+                    else:
+                        curr_path = self.find_path_to_nearest_cell_with_status(self.bot.position, "UNKNOWN")                
             else:
                 if self.bot.position == self.leaks[0]:
                     game_is_on = False
                     return total_moves
                 if curr_path:
+                    if steps % 8 == 0 and not sensed:
+                        sensed = self.sense()
+                        if sensed:
+                            curr_path = self.find_path_to_nearest_cell_with_status(self.bot.position, "MIGHT_HAVE_LEAK")
                     next_move = curr_path.pop(0)
                     self.knowledge_grid[next_move[0]][next_move[1]] = "NO LEAK"
                     self.bot.move(next_move)
@@ -444,75 +505,259 @@ class GameManager:
                         curr_path = self.find_path_to_nearest_cell_with_status(self.bot.position, "MIGHT_HAVE_LEAK")
                 if not curr_path and not sensed:
                     #next_target = self.nearest_neighbor(self.bot.position, strategic_points, visited)
-                    next_target = strategic_points.pop(0)
-                    curr_path = self.find_path_to_edge(self.bot_position, next_target)
+                    if strategic_points:
+                        next_target = strategic_points.pop(0)
+                        curr_path = self.find_path_to_edge(self.bot.position, next_target)
+                    else:
+                        curr_path = self.find_path_to_nearest_cell_with_status(self.bot.position,"UNKNOWN" )
+                    
+
+                    
                     
     def strategy_five(self):
         sensed = self.sense()
         game_is_on = True
         curr_path = []
         Moves = 0
+        h = 0
 
         while game_is_on:
             print("\n")
             print(self)
             print("\n")
             print(self.bot.position)
-            Moves += 1
+            h += 1
+            print(f"Move Counter: {Moves}")
+            
+            if Moves < 2:
+                print(len(self.leaks))
+                press_key = input("Press Enter...")
             
             
             patched_leaks = [leak for leak in self.leaks if self.bot.position == leak]
             for leak in patched_leaks:
                 self.leaks.remove(leak)
+                sensed = self.sense_three()
+                print(f"Sensed after patch: {sensed}")
+                Moves += 1
                 print("Bot has patched a leak")
             
             if not self.leaks:
+                print(len(self.leaks))
+                print("All leaks patched")
                 return Moves
-            
-            # If bot detected a leak, move to the nearest MIGHT_HAVE_LEAK cell
+
+            # if len(self.leaks) == 1:
+            #     print(len(self.leaks))
+            #     print(f"Sensed after each move patch: {sensed}")
+            #     press_key = input("Write something to continue...")
+        # If bot detected a leak, move to the nearest MIGHT_HAVE_LEAK cell
             if curr_path:
                 next_move = curr_path.pop(0)
                 self.bot.move(next_move)
                 self.knowledge_grid[next_move[0]][next_move[1]] = "NO LEAK"
+                Moves += 1
                 continue
-            
+                
             if sensed and not curr_path:
-                curr_path = self.find_path_to_nearest_cell_with_status(self.bot.position, "MIGHT_HAVE_LEAK")
+                #print(sensed)
+                print(f"number of leaks remaing is: {len(self.leaks)}")
+                print("has sensed but no path ")
+                self.knowledge_grid[self.bot.position[0]][self.bot.position[1]] = "NO LEAK"
+                curr_path = self.find_path_to_nearest_cell_with_status(self.bot.position,"MIGHT_HAVE_LEAK")
                 continue
-            
+        
             if not sensed and not curr_path:
                 print("bot is sensing")
                 #new_sensed = self.sense()
                 #if sensed is None:
                     #sensed = set()
                 if len(self.leaks) > 1:
-                    sensed = self.sense_two()
+                    sensed = self.sense_three()
+                    Moves += 1
                     if sensed:
-                        curr_path = self.find_path_to_nearest_cell_with_status(self.bot.position, "MIGHT_HAVE_LEAK")
+                        curr_path = self.find_path_to_nearest_cell_with_status(self.bot.position,"MIGHT_HAVE_LEAK")
+                        print(curr_path)
+                        print("I have sensed")
+                        print(sensed)
                     else:
                         print(f"sensed is: {sensed}")
                         print("not sensed")
-                        curr_path = self.find_path_to_nearest_cell_with_status(self.bot.position, "UNKNOWN")  
+                        curr_path = self.find_path_to_nearest_cell_with_status(self.bot.position,"UNKNOWN") 
                 else:
-                    sensed = self.sense()
+                    print("Next else triggered")
+                    sensed = self.sense_three()
+                    Moves += 1
                     if sensed:
                         curr_path = self.find_path_to_nearest_cell_with_status(self.bot.position, "MIGHT_HAVE_LEAK")
             # If no leak is detected, move to the nearest UNKNOWN cell
                     else:
                         print(f"sensed is: {sensed}")
                         print("not sensed")
-                        curr_path = self.find_path_to_nearest_cell_with_status(self.bot.position, "UNKNOWN")   
-        return Moves
-                    
+                        curr_path = self.find_path_to_nearest_cell_with_status(self.bot.position, "UNKNOWN")
+            
 
+    def strategy_six(self):
+        detection_threshold = 10
+        game_is_on = True
+        curr_path = []
+        # If the detection range is large, start from the center
+        total_moves = 0
+        
+        strategic_points = self.get_strategic_points()
+        edge_locater = 0
+        edges = []
+        sensed = self.sense_three()
+        initial_target_reached = False
+        steps = 0
+        target = strategic_points.pop(0)
+        
+        
+        while game_is_on:
+            steps += 1
+            #print(f"curr path: {curr_path}")
+            #print(f"sensed is: {sensed}")
+            print(f"total_moves are: {total_moves}")
+            print(f"bot position is: {self.bot.position}")
+            #print(self)
+            if steps > 400:
+                print(f"curr path: {curr_path}")
+                print(f"sensed is: {sensed}")
+                print(self)
+                user = input("Press Enter....")
+            while not initial_target_reached:
+                if self.bot.position == target:
+                    self.knowledge_grid[self.bot.position[0]][self.bot.position[1]] = "NO LEAK"
+                    initial_target_reached = True
+                if not curr_path:
+                    curr_path = self.find_path_to_edge(self.bot.position, target)
+                elif curr_path:
+                    # print(f"in loop curr path: {curr_path}")
+                    # m = input("Press Enter...")
+                    next_move = curr_path.pop(0)
+                    self.bot.move(next_move)
+                    self.knowledge_grid[next_move[0]][next_move[1]] = "NO LEAK"
+                    total_moves += 1
+                    steps += 1
+                    if steps % (2*self.k +1) == 0:
+                        sensed = self.sense_three()
+                        total_moves += 1
+                        if sensed:
+                            curr_path = []
+                            self.knowledge_grid[self.bot.position[0]][self.bot.position[1]] = "NO LEAK"
+                            initial_target_reached = True
+                            break                      
+            patched_leaks = [leak for leak in self.leaks if self.bot.position == leak]
+            for leak in patched_leaks:
+                self.leaks.remove(leak)
+                sensed = self.sense_three()
+                print(f"Sensed after patch: {sensed}")
+                total_moves += 1
+                print("Bot has patched a leak")
+            
+            if not self.leaks:
+                print(len(self.leaks))
+                print("All leaks patched")
+                return total_moves
+            
+            if self.k >= detection_threshold:
+                if curr_path and not sensed:
+                        if steps % (2*self.k + 1) == 0:
+                            sensed = self.sense_three()
+                            total_moves += 1
+                            if sensed:
+                                edges = self.infer_edges()
+                                self.knowledge_grid[self.bot.position[0]][self.bot.position[1]] = "NO LEAK"
+                                curr_path = self.find_path_to_edge(self.bot.position, edges[edge_locater])
+                        if curr_path:
+                            next_move = curr_path.pop(0)
+                            self.knowledge_grid[next_move[0]][next_move[1]] = "NO LEAK"
+                            self.bot.move(next_move)
+                            total_moves += 1
+                            continue
+                if sensed:
+                    #print(f"length of edges: {len(edges)}")
+                    #m = input("Have sensed...")
+                    if curr_path:
+                        next_move = curr_path.pop(0)
+                        self.knowledge_grid[next_move[0]][next_move[1]] = "NO LEAK"
+                        self.bot.move(next_move)
+                        total_moves += 1
+                    elif not edges:
+                        edges = self.infer_edges()
+                        curr_path = self.find_path_to_edge(self.bot.position, edges[edge_locater])
+                    else:
+                        print("tryin to resense")
+                        new_sensed = self.sense_three()
+                        if new_sensed:
+                            if self.leaks[0] not in new_sensed:
+                                print("not in sensed")
+                                #k = input("Enter....")
+                            self.knowledge_grid[self.bot.position[0]][self.bot.position[1]] = "NO LEAK"
+                            curr_path = self.find_path_to_nearest_cell_with_status(self.bot.position,"MIGHT_HAVE_LEAK")
+                        else:
+                            print(f"current edge number: {edge_locater}")
+                            print(new_sensed)
+                            if edge_locater >= len(edges):
+                                print(f" length of egdes: {len(edges)}")
+                                #m = input("Edge Locator Breached!")
+                            curr_path = self.find_path_to_edge(self.bot.position,edges[edge_locater])
+                            edge_locater += 1
+                if not curr_path and not sensed:
+                    if strategic_points:
+                        next_target = strategic_points.pop(0)
+                        curr_path = self.find_path_to_edge(self.bot.position, next_target)
+                    else:
+                        curr_path = self.find_path_to_nearest_cell_with_status(self.bot.position,"UNKNOWN" )
+            else:
+                if curr_path:
+                    if steps % 8 == 0 and not sensed:
+                        cell = curr_path[0]
+                        sensed = self.sense_three()
+                        if sensed:
+                            print(self.knowledge_grid[cell[0]][cell[1]])
+                            self.knowledge_grid[self.bot.position[0]][self.bot.position[1]] = "NO LEAK"
+                            curr_path = self.find_path_to_nearest_cell_with_status(self.bot.position, "MIGHT_HAVE_LEAK")
+                    next_move = curr_path.pop(0)
+                    self.knowledge_grid[next_move[0]][next_move[1]] = "NO LEAK"
+                    self.bot.move(next_move)
+                    total_moves += 1
+                    continue
+                if sensed and not curr_path:
+                    self.knowledge_grid[self.bot.position[0]][self.bot.position[1]] = "NO LEAK"
+                    print(self.knowledge_grid[self.bot.position[0]][self.bot.position[1]])
+                    curr_path = self.find_path_to_nearest_cell_with_status(self.bot.position, "MIGHT_HAVE_LEAK")
+                if not curr_path:
+                    print("no curr path, tryin to resense")
+                    sensed = self.sense_three()
+                    total_moves += 1
+                    if sensed:
+                        curr_path = self.find_path_to_nearest_cell_with_status(self.bot.position, "MIGHT_HAVE_LEAK")
+                if not curr_path and not sensed:
+                    #next_target = self.nearest_neighbor(self.bot.position, strategic_points, visited)
+                    print("finding strategic route")
+                    if strategic_points:
+                        next_target = strategic_points.pop(0)
+                        curr_path = self.find_path_to_edge(self.bot.position, next_target)
+                    else:
+                        curr_path = self.find_path_to_nearest_cell_with_status(self.bot.position,"UNKNOWN" )
+
+
+    
+    
+    
     
     def run_game(self):
         if self.bot_strategy == 1:
             return self.strategy_one()
         if self.bot_strategy == 2:
             return self.strategy_two()
+        if self.bot_strategy == 3:
+            self.playy_game()
         if self.bot_strategy == 5:
             return self.strategy_five()
+        if self.bot_strategy == 6:
+            return self.strategy_six()
     
     
     def __str__(self):
@@ -542,8 +787,73 @@ class GameManager:
                         row.append('X')  # Default in case of unexpected statuses
             output.append(' '.join(row))
         return '\n'.join(output)
+    
+    
+  
+    def sense_three(self):
+        sensed_grid = self.generate_sense_grid()
+        leaks = [leaks for leaks in self.leaks if leaks in sensed_grid]
+        print(f"leaks in sensed: {leaks}")
+        if leaks:
+            #print("I am dumb so i find leaks")
+            for cell in sensed_grid:
+                    self.knowledge_grid[cell[0]][cell[1]] = "MIGHT_HAVE_LEAK"
+            return sensed_grid
+        else:
+            for cell in sensed_grid:
+                self.knowledge_grid[cell[0]][cell[1]] = "NO LEAK"
+        return None
+    
+
+    def move_to(self, position):
+        # Moves the bot to the specified position
+        self.bot.position = position
+        self.visited_nodes.add(position)
+        
+        
+        
+    def play_game(self):
+        # Initial game setup before the loop starts
+        game_is_on = True
+        moves = 0
+        # Main game loop
+        while game_is_on:
+            # Perform a sense action
+            
+            sensed_grid = self.sense_three()
+            
+            if sensed_grid:
+                # If the bot senses a leak, perform a targeted search
+                returned_moves = self.targeted_search(moves)
+                moves += returned_moves
+            else:
+                # If no leak is sensed, perform a spiral search
+                returned_moves = self.spiral_search(moves)
+                moves += returned_moves
+
+            # Check if all leaks have been found
+            if self.all_leaks_found():
+                game_is_on = False  # End the game if all leaks are found
+                print("All leaks have been found. Game over.")
+                break
+            
+            # Implement other stopping conditions if necessary, like a maximum number of moves
+
+        # End of the game
+        print("Game has ended.")
+        return moves
+
+    def all_leaks_found(self):
+        # Return True if all leaks have been found, False otherwise
+        for leak in self.leaks:
+            x, y = leak
+            if self.knowledge_grid[x][y] != "LEAK":
+                return False
+        return True
 
 
+# Replace `self.sense()` in targeted_search with actual sensing logic
 
+    
         
             
