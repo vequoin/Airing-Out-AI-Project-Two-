@@ -1,4 +1,4 @@
-from GameManager import GameManager
+from GameManagerDeterministic import GameManager
 import matplotlib.pyplot as plt
 
 NUM_SIMULATIONS = 30
