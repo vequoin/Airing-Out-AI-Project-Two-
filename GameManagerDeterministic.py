@@ -2,7 +2,6 @@ import random
 from collections import deque
 from Ship import Ship
 from bot import Bot
-from prob_strategies import Strategy3Bot
 
 class GameManager:
     def __init__(self, ship_size,bot_strategy, k):
@@ -39,7 +38,9 @@ class GameManager:
         
         #self.knowledge_grid = [['UNKNOWN' for _ in range(ship_size)] for _ in range(ship_size)]
         self.knowledge_grid = [['#' if cell == 1 else 'UNKNOWN' for cell in row] for row in self.ship.ship]
+        
         self.isleak = self.initialize_leaks()
+        
         self.no_leaks = []
         
     
@@ -109,18 +110,6 @@ class GameManager:
                 self.knowledge_grid[cell[0]][cell[1]] = "NO LEAK"
             return None
         
-        
-    def sense_two(self):
-        sensed_grid = self.generate_sense_grid()
-        if self.leaks[0] in sensed_grid or self.leaks[1] in sensed_grid:
-            for cell in sensed_grid: 
-                self.knowledge_grid[cell[0]][cell[1]] = "MIGHT_HAVE_LEAK"
-            return sensed_grid
-        else:
-            for cell in sensed_grid:
-                if self.knowledge_grid[cell[0]][cell[1]] == "UNKNOWN":
-                    self.knowledge_grid[cell[0]][cell[1]] = "NO LEAK"
-            return None
 
     def generate_sense_grid(self):
         x, y = self.bot.position
@@ -396,15 +385,15 @@ class GameManager:
             #print(f"sensed is: {sensed}")
             #print(f"curr_path is: {curr_path}")
             print(f"total_moves are: {total_moves}")
-            print(f"bot position is: {self.bot.position}")
+            #print(f"bot position is: {self.bot.position}")
             steps += 1
             #print(self)
             if total_moves > 500:
-                print(f"curr_path is: {curr_path}")
+                #print(f"curr_path is: {curr_path}")
                 print(f"bot position is: {self.bot.position}")
-                print(f"sensed is: {sensed}")
-                print(self)
-                user = input("Press Enter....")
+                #print(f"sensed is: {sensed}")
+                #print(self)
+                #user = input("Press Enter....")
             while not initial_target_reached:
                 if self.bot.position == target:
                     initial_target_reached = True
@@ -522,14 +511,16 @@ class GameManager:
         h = 0
 
         while game_is_on:
-            print("\n")
-            print(self)
-            print("\n")
-            print(self.bot.position)
+            # print("\n")
+            # print(self)
+            # print("\n")
+            # print(self.bot.position)
             h += 1
             print(f"Move Counter: {Moves}")
             
-            if Moves < 2:
+            if Moves > 5000 and not curr_path:
+                print(f"bot position is: {self.bot.position}")
+                print(self)
                 print(len(self.leaks))
                 press_key = input("Press Enter...")
             
@@ -595,6 +586,8 @@ class GameManager:
                         print(f"sensed is: {sensed}")
                         print("not sensed")
                         curr_path = self.find_path_to_nearest_cell_with_status(self.bot.position, "UNKNOWN")
+                        if not curr_path:
+                            curr_path = self.find_path_to_nearest_cell_with_status(self.bot.position, "MIGHT_HAVE_LEAK")
             
 
     def strategy_six(self):
@@ -752,8 +745,6 @@ class GameManager:
             return self.strategy_one()
         if self.bot_strategy == 2:
             return self.strategy_two()
-        if self.bot_strategy == 3:
-            self.playy_game()
         if self.bot_strategy == 5:
             return self.strategy_five()
         if self.bot_strategy == 6:
