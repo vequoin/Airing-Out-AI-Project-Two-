@@ -467,7 +467,6 @@ class GameManager:
                             if self.leaks[0] in sensed:
                                 print("in sensed")
                             if edge_locater >= len(edges):
-                                edge_Locater = 0
                                 print(f" length of egdes: {len(edges)}")
                                 #m = input("Edge Locator Breached!")
                             curr_path = self.find_path_to_edge(self.bot.position,edges[edge_locater])
@@ -657,9 +656,10 @@ class GameManager:
             for leak in patched_leaks:
                 self.leaks.remove(leak)
                 sensed = self.sense_three()
-                print(f"Sensed after patch: {sensed}")
+                edges.clear()
+                #print(f"Sensed after patch: {sensed}")
                 total_moves += 1
-                print("Bot has patched a leak")
+                #print("Bot has patched a leak")
             
             if not self.leaks:
                 print(len(self.leaks))
@@ -674,7 +674,13 @@ class GameManager:
                             if sensed:
                                 edges = self.infer_edges()
                                 self.knowledge_grid[self.bot.position[0]][self.bot.position[1]] = "NO LEAK"
-                                curr_path = self.find_path_to_edge(self.bot.position, edges[edge_locater])
+                                # print(f"length of edges: {len(edges)}")
+                                # print(f"edge list: {edges}")
+                                # print(self)
+                                # i = input("Press Enter...")
+                                if edge_locater >= 4:
+                                    edge_locater = 0
+                                    curr_path = self.find_path_to_edge(self.bot.position, edges[edge_locater])
                         if curr_path:
                             next_move = curr_path.pop(0)
                             self.knowledge_grid[next_move[0]][next_move[1]] = "NO LEAK"
@@ -691,23 +697,30 @@ class GameManager:
                         total_moves += 1
                     elif not edges:
                         edges = self.infer_edges()
+                        edge_locater = 0
                         curr_path = self.find_path_to_edge(self.bot.position, edges[edge_locater])
                     else:
-                        print("tryin to resense")
+                        #print("tryin to resense")
                         new_sensed = self.sense_three()
                         #print(f"new sensed is: {sensed}")
                         self.knowledge_grid[self.bot.position[0]][self.bot.position[1]] = "NO LEAK"
                         if new_sensed:
                             if self.leaks[0] not in sensed:
-                                print("not in sensed")
+                                pass
+                                #print("not in sensed")
                                 #k = input("Enter....")
                             curr_path = self.find_path_to_nearest_cell_with_status(self.bot.position,"MIGHT_HAVE_LEAK")
                         else:
-                            print(f"current edge number: {edge_locater}")
-                            print(new_sensed)
+                            #print(f"current edge number: {edge_locater}")
+                            #print(new_sensed)
                             if edge_locater >= len(edges):
-                                print(f" length of egdes: {len(edges)}")
-                                #m = input("Edge Locator Breached!")
+                                edge_locater = 0
+                                # print(f"length of edges: {len(edges)}")
+                                # print(f"edge list: {edges}")
+                                # print(self)
+                                # i = input("Press Enter...")
+                                # print(f" length of egdes: {len(edges)}")
+                                # m = input("Edge Locator Breached!")
                             curr_path = self.find_path_to_edge(self.bot.position,edges[edge_locater])
                             edge_locater += 1
                 if not curr_path and not sensed:
@@ -721,7 +734,7 @@ class GameManager:
                             curr_path = self.find_path_to_nearest_cell_with_status(self.bot.position, "MIGHT_HAVE_LEAK")
             else:
                 if curr_path:
-                    if steps % 8 == 0 and not sensed:
+                    if steps % self.k == 0 and not sensed:
                         cell = curr_path[0]
                         sensed = self.sense_three()
                         if sensed:
