@@ -467,6 +467,7 @@ class GameManager:
                             if self.leaks[0] in sensed:
                                 print("in sensed")
                             if edge_locater >= len(edges):
+                                edge_Locater = 0
                                 print(f" length of egdes: {len(edges)}")
                                 #m = input("Edge Locator Breached!")
                             curr_path = self.find_path_to_edge(self.bot.position,edges[edge_locater])
