@@ -1,8 +1,8 @@
+import heapq
 import random
 from collections import deque
 from Ship import Ship
 from prob_strategies import Strategy3Bot
-from bot9 import Strategy9_Bot
 import math
 import itertools
 import numpy as np
@@ -28,7 +28,7 @@ class GameManager_Probability:
         
         self.bot = Strategy3Bot(self.ship, self.bot_position)
         
-        self.visited = {} 
+        self.visited = set()
         
         # Create leaks on the ship randomly generated based on bot strategy 
         self.leaks = []
@@ -162,27 +162,30 @@ class GameManager_Probability:
         return []  # Return an empty list if no path is found
     
 
+    def find_path(self, start_position, edge_cell, avoiding):
+        queue = deque([(start_position, [])])  # Each item is a tuple (position, path_so_far)
+        visited = set([start_position])
 
-    def calculate_uncertainty(self):
-        # Convert probabilities to a flat list excluding walls and visited cells
-        probabilities = [prob for row in self.probability_grid for prob in row if isinstance(prob, float)]
-        # Calculate the standard deviation or entropy as a measure of uncertainty
-        std_dev = np.std(probabilities)
-        # You can also calculate entropy as an alternative measure of uncertainty
-        entropy = -np.sum([p * np.log(p) for p in probabilities if p > 0])
-        return std_dev, entropy
+        while queue:
+            (x, y), path = queue.popleft()
+            if (x, y) == edge_cell:
+                return path  # Return the path once we've reached the edge cell
 
-    def dynamic_waiting(self, uncertainty):
-        # Determine the number of waiting steps based on the level of uncertainty
-        std_dev, entropy = uncertainty
-        # This is a simple rule that could be replaced with something more sophisticated
-        # The higher the uncertainty, the more we wait (sense)
-        if std_dev > self.threshold_std_dev:
-            return int(std_dev * self.waiting_factor)
-        if entropy > self.threshold_entropy:
-            return int(entropy * self.waiting_factor)
-        return 1  # Default to one sensing action if uncertainty is low
+            # Add unvisited neighbors to the queue
+            if avoiding:
+                for neighbor in self.ship.get_open_neighbors((x, y)):
+                    if neighbor not in visited and neighbor not in self.visited:
+                        new_path = path + [neighbor]
+                        queue.append((neighbor, new_path))
+                        visited.add(neighbor)
+            else:
+                 for neighbor in self.ship.get_open_neighbors((x, y)):
+                    if neighbor not in visited:
+                        new_path = path + [neighbor]
+                        queue.append((neighbor, new_path))
+                        visited.add(neighbor)
 
+        return []
         
         
     def calculate_probability(self, target):
@@ -275,6 +278,17 @@ class GameManager_Probability:
         return random.choice(cells_with_min_distance)
 
 
+    def pathfinding_choice(self,target):
+        path = self.find_path(self.bot.position,target, True)
+        path_two = path = self.find_path(self.bot.position,target, False)
+        if not path:
+            return path_two
+        if len(path) < 1.5*len(path_two):
+            return path_two
+        else:
+            return path 
+
+
     def bfs(self, start_position, target):
         queue = deque([(start_position, 0)])  # Queue holds tuples of (position, distance)
         visited = set([start_position])
@@ -315,14 +329,6 @@ class GameManager_Probability:
         beep_probability = self.calculate_probability(self.leaks[0])
         num  = random.random()
         num /= 10
-        #print(f"beep probability: {beep_probability}")
-        #print(f"random is: {num}")
-        #print(self)
-        # if num <= beep_probability:
-        #     print(f"beep probability: {beep_probability}")
-        #     print(f"random is: {num}")
-        #     print(self)
-        #     i = input("Enter something...")
         beep_heard = num <= beep_probability
         return beep_heard
 
@@ -372,20 +378,6 @@ class GameManager_Probability:
                 if(move == self.leaks[0]):
                     return actions
         return actions
-    
-        # ... within the GameManager_Probability class ...
-        
-        
-    def play_game_nine(self):
-       pass
-    
-    def wait_and_sense(self):
-        # Implement waiting based on the current uncertainty in the probability distribution
-        uncertainty = self.calculate_uncertainty()
-        waiting_steps = self.dynamic_waiting(uncertainty)
-        for _ in range(waiting_steps):
-            beep_heard = self.sense()
-            self.update_probabilities(beep_heard)
             
             
 
@@ -415,13 +407,12 @@ class GameManager_Probability:
     def play_game_four_two(self):
         curr_path = []
         actions = 0
-        print(self)
+        #print(self)
         self.probability_grid[self.bot.position[0]][self.bot.position[1]] = 0
+        self.visited.add(self.bot.position)
         iswaiting = False
         # Assuming that your bot's position and the leaks are all tuples now.
         while self.bot.position != self.leaks[0]:
-            uncertainty = self.calculate_uncertainty()
-            wait_steps = self.dynamic_waiting(uncertainty)
             action_count = 3
             beep_heard = False
             print(f"Beep is: {beep_heard}")
@@ -441,9 +432,10 @@ class GameManager_Probability:
             #     for j in range(len(self.probability_grid)):
             #         if self.probability_grid[i][j] != "#":
             #             if self.probability_grid[i][j] == 0:
-            #                 print(f"Marked as zero: {i,j}")
-            next_move = self.choose_next_move()
-            curr_path = self.find_path_to_edge(self.bot.position, next_move)
+            #               `print(f"Marked as zero: {i,j}")
+            next_target = self.choose_next_move()
+            curr_path = self.pathfinding_choice(next_target)
+            #curr_path = self.find_path_to_edge(self.bot.position, next_target)
             print(f"bot is at: {self.bot.position}")
             #print("This is the bot representation: ")
             #print(self)
@@ -455,6 +447,7 @@ class GameManager_Probability:
                 move = curr_path.pop(0)
                 self.bot.move(move)
                 self.probability_grid[self.bot.position[0]][self.bot.position[1]] = 0
+                self.visited.add(move)
                 self.normalize_probabilities()
                 if not iswaiting:
                     beep = self.sense()
@@ -561,6 +554,41 @@ class GameManager_Probability:
         return choice[1]
     
     
+    
+    def choose_next_move_multi_nine(self):
+        # Find the maximum numerical probability
+        max_probability = max(self.probability_grid.values())
+        
+        print(f"Max probability: {max_probability}")
+
+        # Compile a list of cells that have the maximum probability
+        candidate_cells = [
+            key for key, val in self.probability_grid.items() if val == max_probability
+        ]
+        
+        #print(candidate_cells)
+         # Calculate BFS distance once and store it
+        distances = {cell_pair: min(self.bfs(self.bot.position, cell_pair[0]), self.bfs(self.bot.position, cell_pair[1])) for cell_pair in candidate_cells}
+        # Find the closest candidate cell
+        min_distance = math.inf
+        
+        #Breaking ties by distance 
+        # Sort by distance
+        closest_candidates = sorted(candidate_cells, key=lambda cell_pair: distances[cell_pair])
+
+        min_distance = distances[closest_candidates[0]]
+
+        # Filter cells with minimum distance
+        cells_with_min_distance = [cell for cell in closest_candidates if distances[cell] == min_distance]
+        choice  = random.choice(cells_with_min_distance)
+        #print(f"target choice is: {choice}")
+        # calc_dis_one = self.bfs(self.bot.position, choice[0])
+        # calc_dis_two = self.bfs(self.bot.position, choice[1])
+        # if calc_dis_one < calc_dis_two:
+        #     return choice[0]
+        return choice
+    
+    
     def update_probabilities_for_visited(self, visited):
         #print(f"Updating probabilities for visited cell: {visited}")
         total = 0
@@ -617,7 +645,8 @@ class GameManager_Probability:
                 self.update_probabilities_for_visited(next_move)
                 actions += 1
                 if next_move in self.leaks:
-                    self.leaks.remove(next_move)  # Remove the found leak
+                    self.leaks.remove(next_move)
+                    return actions# Remove the found leak
             else:
                 beep_heard = self.sense_mutiple()
                 actions += 1
@@ -646,8 +675,8 @@ class GameManager_Probability:
         for row in ship_state:
             print(' '.join(str(cell) for cell in row))
         print("\n")
-        
-        
+     
+    
         
     def strategy_nine(self):
         actions = 0
@@ -659,87 +688,157 @@ class GameManager_Probability:
         print("after update first")
         self.update_probabilities_multiple(beep_heard)
         print("after update multiple")
+        steps = 0
         target = None
         patched_leak = None
-        choice_target = self.choose_next_move_multi()
+        choice_target = self.choose_next_move_multi_nine()
         if self.bfs(self.bot.position, choice_target[0]) < self.bfs(self.bot.position, choice_target[1]):
             target = choice_target[0]
         else:
             target = choice_target[1]
         curr_path = self.find_path_to_edge(self.bot.position, target)
         print(f"leaks are in {self.leaks}")
+        is_exploiting = False
+        is_exploring = False
+        if beep_heard:
+            is_exploiting = True
+            is_exploring = False
+        else:
+            is_exploring  = True
+            is_exploiting = False
         search_space = None
         #i = input("Enter something ...")
         first_leaks = True
         while first_leaks:
-            total = 0
-            total_zero_pairs = sum(1 for val in self.probability_grid.values() if val == 0)
             # print(f"total cells in probability grid: {len(self.probability_grid)}")
             # print(f"total number of zero cells: {total_zero_pairs}")
             # print(f"bot postion is: {self.bot.position}")
-            print(f"total moves: {actions}")
-            # print(f"curr path is: {curr_path}")  
+            #print(f"total moves: {actions}")
+            # print(f"curr path is: {curr_path}")
+            steps += 1
+            if is_exploring and steps % 8 == 0:
+                beep_heard = self.sense_mutiple()
+                actions += 1
+                if beep_heard:
+                    is_exploiting = True
+                    is_exploring = False
+                else:
+                    is_exploring = True
+                    is_exploiting = False
+            if is_exploiting:
+                target = self.find_closest_high_prob_cell()
+                curr_path = self.find_path_to_edge(self.bot.position, target)
+            if self.bot.position in self.leaks:
+                self.leaks.remove(self.bot.position)
+                self.update_probabilities_for_visited(self.bot.position)
+                self.normalize_probabilities()
+                first_leaks = False
+                break
+                if not self.leaks():
+                    return actions
             if curr_path:
                 #self.print_ship_state()
                 # i = input("Enter something ...")
+                steps += 1
                 next_move = curr_path.pop(0)
                 self.bot.move(next_move)
+                #self.print_ship_state
+                #print(f"total moves: {actions}")
                 if self.bot.position in self.leaks:
                         self.leaks.remove(next_move)  # Remove the found leak
                         patched_leak = next_move
+                        # if not self.leaks:
+                        #     print("All leaks patched")
+                        #     return actions
                         print(f"Leak found and removed at {next_move}. Remaining leaks: {self.leaks}") 
+                        print(f"total moves: {actions}")
+                        print(f"bot postion is: {self.bot.position}")
+                        #return actions
                         search_space = self.get_all_leak_cells_with_first_leak(self.bot.position, choice_target)
-                        print(search_space)
+                        #print(search_space)
                         #i = input("Enter something....")
                         first_leaks = False
-                        break
-                bot_position_in_leak = None
+                self.visited.add(self.bot.position)
+                #print(f"total actions: {actions}")
                 self.update_probabilities_for_visited(next_move)
                 actions += 1
                 #i = input("Break ....")
             else:
+                print(f"total actions: {actions}")
+                print(f"bot position: {self.bot.position}")
+                self.visited.add(self.bot.position)
+                #self.print_ship_state()
+                #print(f"total moves: {actions}")
+                #print(f"bot postion is: {self.bot.position}")
                 beep_heard = self.sense_mutiple()
-                actions += 1
-                #self.update_probabilities_for_visited(visited)
                 self.update_probabilities_multiple(beep_heard)
-                choice_target = self.choose_next_move_multi()
-                if self.bfs(self.bot.position, choice_target[0]) < self.bfs(self.bot.position, choice_target[1]):
-                    target = choice_target[0]
+                actions += 1
+                steps += 1
+                if beep_heard:
+                    is_exploiting = True
+                    is_exploring  = False
                 else:
-                    target = choice_target[1]
-                curr_path = self.find_path_to_edge(self.bot.position, target)
+                    is_exploring = True
+                    is_exploiting = False
+                if is_exploiting:
+                    target = self.find_closest_high_prob_cell()
+                    curr_path = self.find_path_to_edge(self.bot.position, target)
+                elif is_exploring:
+                    target = self.find_unvisited_cell()
+                    curr_path = self.find_path_to_edge(self.bot.position, target)
+                # if self.bfs(self.bot.position, choice_target[0]) < self.bfs(self.bot.position, choice_target[1]):
+                #     target = choice_target[0]
+                # else:
+                #     target = choice_target[1]
+                # curr_path = self.find_path_to_edge(self.bot.position, target)
         #print(f"search space is: {search_space}")
         if search_space:
             beep = self.sense_smaller_space()
             actions += 1
             print(f"total actions: {actions}")
             print(f"beep heard smaller space: {beep}")
+            #self.print_ship_state()
+            #i = input("Check state...")
             self.update_probabilities_new_search_space(search_space, beep)
+            #if beep:
+            #    target = target = self.find_closest_high_prob_cell()
+            #    curr_path = self.find_path_to_edge(self.bot.position, target)
             choice_target = self.choose_move_search_space(search_space)
             if choice_target[1] == patched_leak:
                 target = choice_target[0]
             else:
                 target = choice_target[1]
             curr_path = self.find_path_to_edge(self.bot.position, target)
+            # if choice_target:
+            #     search_space[choice_target] = 0
+            # else:
+            #     search_space[(target, patched_leak)] = 0
             while self.leaks:
                 if curr_path:
                     next_move = curr_path.pop(0)
-                    #self.print_ship_state()
-                    #i = input("Enter....")
+                    # self.print_ship_state()
+                    # i = input("Check state...")
                     self.bot.move(next_move)
                     search_space[choice_target] = 0
-                    self.normalize_search_space(search_space)
-                    actions += 1
-                    #i = input("stop at self.leaks curr path ....")
                     if next_move in self.leaks:
                         self.leaks.remove(next_move)  # Remove the found leak
                         print(f"Leak found and removed at {next_move}. Remaining leaks: {self.leaks}")
+                        return actions
                         #i = input("Enter something....")
+                    self.normalize_search_space(search_space)
+                    # print(search_space)
+                    # i = input("dddd")
+                    actions += 1
+                    #i = input("stop at self.leaks curr path ....")
                 else:
                     beep_heard = self.sense_smaller_space()
                     actions += 1
                     #self.update_probabilities_for_visited(visited)
                     self.update_probabilities_new_search_space(search_space, beep_heard)
+                    # if beep:
+                    #     target = target = self.find_closest_high_prob_cell()
+                    #     curr_path = self.find_path_to_edge(self.bot.position, target)
+                    
                     choice_target = self.choose_move_search_space(search_space)
                     #print(f"target is: {choice_target}")
                     if choice_target[0] == patched_leak:
@@ -763,45 +862,50 @@ class GameManager_Probability:
     def choose_move_search_space(self, search_space):
         max_probability = max(search_space.values())
         
-        print(f"Max probability: {max_probability}")
+        #print(f"Max probability: {max_probability}")
+        high_prob_threshold = .90 * max_probability
+        high_prob_cells = [cell for cell, prob in search_space.items() if prob > high_prob_threshold]
+        flattened_cells = [item for pair in high_prob_cells for item in pair]
+        unique_cells = list(set(flattened_cells))
+        nearest_cell = self.bfs_target(self.bot.position, unique_cells)
+        for key in high_prob_cells:
+            if nearest_cell in key:
+                return key
 
-        # Compile a list of cells that have the maximum probability
-        candidate_cells = [
-            key for key, val in search_space.items() if val == max_probability
-        ]
+        # # Compile a list of cells that have the maximum probability
+        # candidate_cells = [
+        #     key for key, val in search_space.items() if val == max_probability
+        # ]
         
-        #print(candidate_cells)
-         # Calculate BFS distance once and store it
-        distances = {cell_pair: min(self.bfs(self.bot.position, cell_pair[0]), self.bfs(self.bot.position, cell_pair[1])) for cell_pair in candidate_cells}
-        # Find the closest candidate cell
-        min_distance = math.inf
+        # #print(candidate_cells)
+        #  # Calculate BFS distance once and store it
+        # distances = {cell_pair: min(self.bfs(self.bot.position, cell_pair[0]), self.bfs(self.bot.position, cell_pair[1])) for cell_pair in candidate_cells}
+        # # Find the closest candidate cell
+        # min_distance = math.inf
         
-        #Breaking ties by distance 
-        # Sort by distance
-        closest_candidates = sorted(candidate_cells, key=lambda cell_pair: distances[cell_pair])
+        # #Breaking ties by distance 
+        # # Sort by distance
+        # closest_candidates = sorted(candidate_cells, key=lambda cell_pair: distances[cell_pair])
 
-        min_distance = distances[closest_candidates[0]]
+        # min_distance = distances[closest_candidates[0]]
 
-        # Filter cells with minimum distance
-        cells_with_min_distance = [cell for cell in closest_candidates if distances[cell] == min_distance]
-        choice  = random.choice(cells_with_min_distance)
-        #print(f"target choice is: {choice}")
-        return choice
+        # # Filter cells with minimum distance
+        # cells_with_min_distance = [cell for cell in closest_candidates if distances[cell] == min_distance]
+        # choice  = random.choice(cells_with_min_distance)
+        # #print(f"target choice is: {choice}")
+        return None
         
 
 
     def get_all_leak_cells_with_first_leak(self, position, found_leak):
         new_search_space = {key : val for key, val in self.probability_grid.items() if position in key and val != 0}
         new_search_space[found_leak]  = 0
-        # for key, val in self.probability_grid.items():
-        #     if position in key:
-        #         print(key, val)
-        #         n = input("Enter...")
         
         self.normalize_search_space(new_search_space)
         return new_search_space
     
     def update_probabilities_new_search_space(self, search_space,beep):
+        
         for ((cell_j), (cell_k)), probability in search_space.items():
             if probability == 0:
                 continue
@@ -819,10 +923,46 @@ class GameManager_Probability:
         
     def normalize_search_space(self, search_space):
         total_probability = sum(search_space.values())
+        #print(f"total probablity in search space: {total_probability}")
         
         for key in search_space:
             search_space[key] /= total_probability
-        
+
+    def find_closest_high_prob_cell(self):
+        Max_probability = max(self.probability_grid.values())
+        high_prob_threshold = .80 * Max_probability
+        high_prob_cells = [cell for cell, prob in self.probability_grid.items() if prob > high_prob_threshold]
+        flattened_cells = [item for pair in high_prob_cells for item in pair]
+        unique_cells = list(set(flattened_cells))
+        nearest_cell = self.bfs_target(self.bot.position, unique_cells)
+        return nearest_cell
+
+    def find_unvisited_cell(self):
+        unvisited_cells = [cell for cell in self.ship.open_cells if cell not in self.visited]
+        return random.choice(unvisited_cells) if unvisited_cells else None
+    
+    
+    def bfs_target(self, start_position, target):
+        queue = [start_position]  # Queue holds tuples of (position, distance)
+        visited = set(start_position)
+
+        while queue:
+            cell = queue.pop(0)
+
+            if cell in target:
+                return cell
+            visited.add(cell)
+
+            # Add unvisited neighbors to the queue
+            for neighbor in self.ship.get_open_neighbors(cell):
+                if neighbor not in visited:
+                    queue.append(neighbor)
+
+        return None
+
+
+    
+
 
     
     def run_game(self):
