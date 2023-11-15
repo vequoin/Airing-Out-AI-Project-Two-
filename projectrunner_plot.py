@@ -1,5 +1,5 @@
-from GameManager_Deterministic import GameManager
-from GameManager_Probability import GameManager_Probability
+from GameManagerDeterministic import GameManager
+from GameManagerProbability import GameManager_Probability
 import matplotlib.pyplot as plt
 import time
 
