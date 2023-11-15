@@ -1,3 +1,4 @@
+import itertools
 import random
 from collections import deque
 from Ship import Ship
@@ -37,7 +38,7 @@ class GameManager:
         self.visited_nodes = set()
         
         #self.knowledge_grid = [['UNKNOWN' for _ in range(ship_size)] for _ in range(ship_size)]
-        self.knowledge_grid = [['#' if cell == 1 else 'UNKNOWN' for cell in row] for row in self.ship.ship]
+        self.knowledge_grid = [['#' if cell == 1 else 'UNKNOWN' for cell in row] for row in self.ship.ship] if self.bot_strategy in range(0,7) else self.initialize_knowledge_grid_multiple()
         
         self.isleak = self.initialize_leaks()
         
@@ -64,7 +65,16 @@ class GameManager:
             self.leaks.append(leak_position)
         # Return True to indicate successful initialization of leaks
         return True
-            
+    
+    
+    
+    def initialize_knowledge_grid_multiple(self):
+       grid = {}
+       open_cells = self.ship.open_cells
+       for cell1, cell2 in itertools.combinations(open_cells, 2):
+           grid[(cell1, cell2)] = "UNKOWN"
+       return grid
+           
     def get_leak_position(self):
         # Extract bot's x and y coordinates
         x, y = self.bot.position
@@ -605,7 +615,277 @@ class GameManager:
                             
                             
   ######################################### Main  Strategy - Six ##################################################                           
+     
+    def update_knowledge_grid(self, cell):
+        for (cell1, cell2), status in self.knowledge_grid.items():
+            if cell == cell1 or cell == cell2:
+                self.knowledge_grid[(cell1, cell2)] = "MIGHT_HAVE_LEAK"
+            else:
+                self.knowledge_grid[(cell1, cell2)] = "NO_LEAK" 
+
+    
+    def bfs(self, start_position, target):
+        queue = deque([(start_position, 0)])  # Queue holds tuples of (position, distance)
+        visited = set([start_position])
+
+        while queue:
+            cell, curr_distance = queue.popleft()
+
+            if cell == target:
+                return curr_distance
+
+            # Add unvisited neighbors to the queue
+            for neighbor in self.ship.get_open_neighbors(cell):
+                if neighbor not in visited:
+                    visited.add(neighbor)
+                    queue.append((neighbor, curr_distance + 1))
+
+        return None
+                
+
+    def sense_six(self):
+        sensed_grid = self.generate_sense_grid()  # This should generate a list of cells that the bot can sense
+        leaks_detected = [leak for leak in self.leaks if leak in sensed_grid]
+
+        print(f"Leaks in sensed: {leaks_detected}")
+        # Update pairs with 'MIGHT_HAVE_LEAK' or 'NO_LEAK' based on sensing
+        for (cell1, cell2), status in self.knowledge_grid.items():
+            if cell1 in sensed_grid or cell2 in sensed_grid:
+                # If any of the leaks are in the sensed grid, mark the pair as 'MIGHT_HAVE_LEAK'
+                if any(leak in leaks_detected for leak in (cell1, cell2)):
+                    self.knowledge_grid[(cell1, cell2)] = "MIGHT_HAVE_LEAK"
+                else:
+                    # If none of the leaks are in the sensed grid, keep the current status
+                    continue
+            else:
+                # If neither cell in the pair is in the sensed grid, mark the pair as 'NO_LEAK'
+                self.knowledge_grid[(cell1, cell2)] = "NO_LEAK"
+
+        # Return the list of cells that were sensed to have a leak, if any
+        return leaks_detected if leaks_detected else None
+
+                
+                
+    def refine_knowledge_after_leak(self, found_leak):
+        for pair in list(self.knowledge_grid.keys()):
+            if found_leak not in pair:
+                del self.knowledge_grid[pair]
+
+    def choose_next_move_MHL(self):
+        candidate_pairs = [pair for pair, status in self.knowledge_grid.items() if status == "MIGHT_HAVE_LEAK"]
+        candidate_cells = set([cell for pair in candidate_pairs for cell in pair])
+
+        # Find the closest cell from candidate cells
+        closest_cell = self.find_closest_cell(self.bot.position, candidate_cells)
+        print(closest_cell)
+        return closest_cell
+
+    def choose_next_move_UK(self):
+        candidate_pairs = [pair for pair, status in self.knowledge_grid.items() if status == "UNKNOWN"]
+        candidate_cells = set([cell for pair in candidate_pairs for cell in pair])
+
+        # Find the closest cell from candidate cells
+        closest_cell = self.find_closest_cell(self.bot.position, candidate_cells)
+        print(closest_cell)
+        return closest_cell
+
+    def find_closest_cell(self, current_position, candidate_cells):
+        min_distance = float('inf')
+        closest_cell = None
+
+        for cell in candidate_cells:
+            distance = self.bfs(current_position, cell)
+            if distance < min_distance:
+                min_distance = distance
+                closest_cell = cell
+
+        return closest_cell
+
+        
+        
+    def strategy_six_two(self):
+        detection_threshold = 10
+        game_is_on = True
+        curr_path = []
+        # If the detection range is large, start from the center
+        total_moves = 0
+        edge_moves = 0
+        strategic_points = self.get_strategic_points()
+        edge_locater = 0
+        edges = []
+        sensed = self.sense_six()
+        initial_target_reached = False
+        steps = 0
+        target = strategic_points.pop(0)
+        while game_is_on:
+            steps += 1
+            #print(f"curr path: {curr_path}")
+            #print(f"sensed is: {sensed}")
+            print(f"total_moves are: {total_moves}")
+            print(f"bot position is: {self.bot.position}")
+            #print(self)
+            # if total_moves > 5000:
+            #     print(f"curr path: {curr_path}")
+                # print(f"sensed is: {sensed}")
+                # print(self)
+                # user = input("Press Enter....")
+            while not initial_target_reached:
+                if self.bot.position == target:
+                    sensed = self.sense_six()
+                    initial_target_reached = True
+                if not curr_path:
+                    curr_path = self.find_path_to_edge(self.bot.position, target)
+                elif curr_path:
+                    # print(f"in loop curr path: {curr_path}")
+                    # m = input("Press Enter...")
+                    next_move = curr_path.pop(0)
+                    self.bot.move(next_move)
+                    if next_move in self.leaks:
+                        self.bot.move(next_move)
+                        self.leaks.remove(next_move)
+                        total_moves += 1
+                        if len(self.leaks) == 0:
+                            return total_moves
+                    self.update_knowledge_grid(self.bot.position)
+                    total_moves += 1
+                    steps += 1
+                    if steps % (2*self.k +1) == 0:
+                        sensed = self.sense_six()
+                        total_moves += 1
+                        if sensed:
+                            curr_path = []
+                            self.update_knowledge_grid(self.bot.position)
+                            initial_target_reached = True
+                            break                      
+            patched_leaks = [leak for leak in self.leaks if self.bot.position == leak]
+            for leak in patched_leaks:
+                self.leaks.remove(leak)
+                sensed = self.sense_six()
+                edges.clear()
+                #print(f"Sensed after patch: {sensed}")
+                total_moves += 1
+                #print("Bot has patched a leak")
             
+            if not self.leaks:
+                print(len(self.leaks))
+                print("All leaks patched")
+                return total_moves
+            
+            if self.k >= detection_threshold:
+                if curr_path and not sensed:
+                        if steps % (2*self.k + 1) == 0:
+                            sensed = self.sense_six()
+                            total_moves += 1
+                            if sensed:
+                                edges = self.infer_edges()
+                                self.update_knowledge_grid(self.bot.position)
+                                if edge_locater >= 4:
+                                    edge_locater = 0
+                                    curr_path = self.find_path_to_edge(self.bot.position, edges[edge_locater])
+                        if curr_path:
+                            next_move = curr_path.pop(0)
+                            self.update_knowledge_grid(self.bot.position)
+                            self.bot.move(next_move)
+                            total_moves += 1
+                            continue
+                if sensed:
+                    #print(f"length of edges: {len(edges)}")
+                    #m = input("Have sensed...")
+                    if curr_path:
+                        next_move = curr_path.pop(0)
+                        self.update_knowledge_grid(self.bot.position)
+                        self.bot.move(next_move)
+                        total_moves += 1
+                    elif not edges:
+                        edges = self.infer_edges()
+                        edge_locater = 0
+                        curr_path = self.find_path_to_edge(self.bot.position, edges[edge_locater])
+                    else:
+                        #print("tryin to resense")
+                        new_sensed = self.sense_six()
+                        #print(f"new sensed is: {sensed}")
+                        self.update_knowledge_grid(self.bot.position)
+                        if new_sensed:
+                                #print("not in sensed")
+                                #k = input("Enter....")
+                            next_target = self.choose_next_move_MHL()
+                            curr_path = self.find_path_to_edge(self.bot.position, next_target)
+                        else:
+                            #print(f"current edge number: {edge_locater}")
+                            #print(new_sensed)
+                            if edge_locater >= len(edges):
+                                edge_locater = 0
+                                # print(f"length of edges: {len(edges)}")
+                                # print(f"edge list: {edges}")
+                                # print(self)
+                                # i = input("Press Enter...")
+                                # print(f" length of egdes: {len(edges)}")
+                                # m = input("Edge Locator Breached!")
+                            curr_path = self.find_path_to_edge(self.bot.position,edges[edge_locater])
+                            edge_locater += 1
+                            edge_moves += 1
+                            if edge_moves > 10:
+                                next_target = self.choose_next_move_MHL()
+                                curr_path = self.find_path_to_edge(self.bot.position, next_target)
+                                if not curr_path:
+                                    next_target = self.choose_next_move_UK()
+                                    curr_path = self.find_path_to_edge(self.bot.position, next_target)
+                if not curr_path and not sensed:
+                    self.update_knowledge_grid(self.bot.position)
+                    if strategic_points and len(self.leaks) > 1:
+                        next_target = strategic_points.pop(0)
+                        curr_path = self.find_path_to_edge(self.bot.position, next_target)
+                    else:
+                        next_target = self.choose_next_move_UK()
+                        curr_path = self.find_path_to_edge(self.bot.position, next_target)
+                        if not curr_path:
+                            next_target = self.choose_next_move_MHL()
+                            curr_path = self.find_path_to_edge(self.bot.position, next_target)
+            else:
+                if curr_path:
+                    if steps % self.k == 0 and not sensed:
+                        cell = curr_path[0]
+                        sensed = self.sense_six()
+                        if sensed:
+                            #print(self.knowledge_grid[cell[0]][cell[1]])
+                            self.update_knowledge_grid(self.bot.position)
+                            next_target = self.choose_next_move_MHL()
+                            curr_path = self.find_path_to_edge(self.bot.position, next_target)
+                    if curr_path:
+                        next_move = curr_path.pop(0)
+                        self.update_knowledge_grid(self.bot.position)
+                        self.bot.move(next_move)
+                        total_moves += 1
+                        continue
+                if sensed and not curr_path:
+                    self.update_knowledge_grid(self.bot.position)
+                    next_target = self.choose_next_move_MHL()
+                    curr_path = self.find_path_to_edge(self.bot.position, next_target)
+                if not curr_path:
+                    print("no curr path, tryin to resense")
+                    sensed = self.sense_six()
+                    print(f"sensed is: {sensed}")
+                    print(f"bot postion: {self.bot.position}")
+                    i = input("Enter...")
+                    total_moves += 1
+                    if sensed:
+                        next_target = self.choose_next_move_MHL()
+                        curr_path = self.find_path_to_edge(self.bot.position, next_target)
+                if not curr_path and not sensed:
+                    #next_target = self.nearest_neighbor(self.bot.position, strategic_points, visited)
+                    print("finding strategic route")
+                    i = input("Enter...")
+                    if strategic_points:
+                        next_target = strategic_points.pop(0)
+                        curr_path = self.find_path_to_edge(self.bot.position, next_target)
+                    else:
+                        next_target = self.choose_next_move_UK()
+                        curr_path = self.find_path_to_edge(self.bot.position, next_target)
+                        if not curr_path:
+                            next_target = self.choose_next_move_MHL()
+                            curr_path = self.find_path_to_edge(self.bot.position, next_target)
+    
+
 
     def strategy_six(self):
         detection_threshold = 10
@@ -621,8 +901,6 @@ class GameManager:
         initial_target_reached = False
         steps = 0
         target = strategic_points.pop(0)
-        
-        
         while game_is_on:
             steps += 1
             #print(f"curr path: {curr_path}")
@@ -790,6 +1068,8 @@ class GameManager:
             return self.strategy_five()
         if self.bot_strategy == 6:
             return self.strategy_six()
+        if self.bot_strategy == 8:
+            return self.strategy_six_two()
     
     
     def __str__(self):
