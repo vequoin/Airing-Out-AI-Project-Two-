@@ -1,36 +1,33 @@
-import csv
-from Ship import Ship
-import struct
-from collections import deque
-import random
-from gametwo import GameManager_Probability
-from GameManager import GameManager
-from multiprocessing import Pool
+from GameManagerDeterministic import GameManager
+from GameManagerProbability import GameManager_Probability
+import matplotlib.pyplot as plt
+import time
 
+NUM_SIMULATIONS_ALPHA = 10
+NUM_SIMULATIONS_K = 10
 
-def run_simulation(alpha, run_number):
-    # Set up your simulation environment with the given alpha value
-    # Run the simulation
-    # Return the result (e.g., number of moves, success/failure, etc.)
-    game = GameManager_Probability(15, 8, alpha)
-    result = game.run_game()
-    return alpha, run_number, result
+def main():
+    start_time = time.time()
+    values_of_k = [2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25]
+    values_of_alpha = [.05,.1,.15,.2,.25,.3,.35,.4, .45,.5,.55,.6, .7,.8, .9, 1]
 
-
-def run_all_simulations(alpha_values, num_simulations_per_alpha):
-    tasks = [(alpha, run) for alpha in alpha_values for run in range(num_simulations_per_alpha)]
-
-    with Pool() as pool:
-        results = pool.starmap(run_simulation, tasks)
-
-    # Save results to a CSV file
-    with open('simulation_results.csv', 'w', newline='') as file:
-        writer = csv.writer(file)
-        writer.writerow(['Alpha Value', 'Run Number', 'Result'])  # Header row
-        for result in results:
-            writer.writerow(result)  # result already contains alpha, run_number, and simulation result
+    for alpha in values_of_alpha:
+        total_result = 0
+        for i in range(NUM_SIMULATIONS_ALPHA):
+            game = GameManager_Probability(50,4, alpha)
+            result = game.run_game()  # run_game should return the number of moves
+            total_result += result
+        averages_alpha.append(total_result / NUM_SIMULATIONS_ALPHA)
+        print(f"Average for alpha={alpha}: {averages_alpha[-1]}")
+        
+    for k in values_of_k:
+       total_result = 0
+       for i in range(NUM_SIMULATIONS_K):
+           game = GameManager_Probability(50,4, k)
+           result = game.run_game()  # run_game should return the number of moves
+           total_result += result
+       averages_k.append(total_result / NUM_SIMULATIONS_K)
+       print(f"Average for alpha={k}: {averages_k[-1]}")
 
 if __name__ == "__main__":
-    alpha_values = [0.1, 0.2, 0.3, 0.4, 0.5,.6, .7,.8, .9, 1]
-    num_simulations_per_alpha = 30
-    run_all_simulations(alpha_values, num_simulations_per_alpha)
+    main()
