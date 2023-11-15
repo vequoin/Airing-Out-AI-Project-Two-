@@ -1,8 +1,7 @@
-import heapq
 import random
 from collections import deque
 from Ship import Ship
-from prob_strategies import Strategy3Bot
+from Strategy3Bot import Strategy3Bot
 import math
 import itertools
 import numpy as np
