@@ -1,4 +1,3 @@
-import heapq
 import random
 from collections import deque
 from Ship import Ship
