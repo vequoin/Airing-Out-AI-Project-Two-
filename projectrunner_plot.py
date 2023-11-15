@@ -25,7 +25,7 @@ def main():
     for k in values_of_k:
        total_result = 0
        for i in range(NUM_SIMULATIONS_K):
-           game = GameManager_Probability(50,4, k)
+           game = GameManager(50,4, k)
            result = game.run_game()  # run_game should return the number of moves
            total_result += result
        averages_k.append(total_result / NUM_SIMULATIONS_K)
@@ -37,8 +37,6 @@ def main():
     plt.xlabel('alpha value')
     plt.ylabel('Average number of moves')
     plt.grid(True)
-    end_time = time.time()  # Record the end time
-    print(f"Total execution time: {end_time - start_time} seconds")
     plt.show()
     
     
