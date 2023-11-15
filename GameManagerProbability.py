@@ -1,3 +1,4 @@
+import heapq
 import random
 from collections import deque
 from Ship import Ship
@@ -377,30 +378,10 @@ class GameManager_Probability:
                 if(move == self.leaks[0]):
                     return actions
         return actions
-            
-            
 
-    def play_game_seven(self):
-        actions = 0
-        self.probability_grid[self.bot.position[0]][self.bot.position[1]] = 0
-        while self.leaks:
-            #print(self)
-            beep_heard = self.sense()
-            actions += 1
-            self.update_probabilities(beep_heard)
-            next_move = self.choose_next_move()
-            path_to_next_move = self.find_path_to_edge(self.bot.position, next_move)
-            while path_to_next_move:
-                move = path_to_next_move.pop(0)
-                self.bot.move(move)
-                self.probability_grid[self.bot.position[0]][self.bot.position[1]] = 0
-                self.normalize_probabilities()
-                actions += 1
-                if move in self.leaks:
-                    self.leaks.remove(move)  # Remove the found leak
-                    self.normalize_probabilities() 
-                    break
-        return actions
+    
+    
+    #########################################  Bot Strategy 4 ####################################################
     
     
     def play_game_four_two(self):
@@ -453,16 +434,47 @@ class GameManager_Probability:
                     actions += 1
                     self.update_probabilities(beep)
                 if beep:
-                    iswaiting = True                  
-                    
+                    iswaiting = True                
                 #print(f"bot position after move : {self.bot.position}")
                 actions += 1   # Update the bot's position
                 #print(self)
                 #print(f"Bot travelling to: {move}")
                 #pit_stop = input("Press Enter.....")
                 if(move == self.leaks[0]):
+                    print(f"Leak found and removed at {move}. Remaining leaks: {self.leaks}")
                     return actions
         return actions
+    
+    
+    
+    ########################################  Bot Strategy 7 ####################################################        
+
+    def play_game_seven(self):
+        actions = 0
+        self.probability_grid[self.bot.position[0]][self.bot.position[1]] = 0
+        while self.leaks:
+            #print(self)
+            beep_heard = self.sense()
+            actions += 1
+            self.update_probabilities(beep_heard)
+            next_move = self.choose_next_move()
+            path_to_next_move = self.find_path_to_edge(self.bot.position, next_move)
+            while path_to_next_move:
+                move = path_to_next_move.pop(0)
+                self.bot.move(move)
+                self.probability_grid[self.bot.position[0]][self.bot.position[1]] = 0
+                self.normalize_probabilities()
+                actions += 1
+                if move in self.leaks:
+                    self.leaks.remove(move)  # Remove the found leak
+                    self.normalize_probabilities() 
+                    break
+        return actions
+    
+    
+    
+    
+    ############################################ strategy 8 ##################################################
     
     
     def initialize_probability_grid_multiple(self):
@@ -553,41 +565,6 @@ class GameManager_Probability:
         return choice[1]
     
     
-    
-    def choose_next_move_multi_nine(self):
-        # Find the maximum numerical probability
-        max_probability = max(self.probability_grid.values())
-        
-        print(f"Max probability: {max_probability}")
-
-        # Compile a list of cells that have the maximum probability
-        candidate_cells = [
-            key for key, val in self.probability_grid.items() if val == max_probability
-        ]
-        
-        #print(candidate_cells)
-         # Calculate BFS distance once and store it
-        distances = {cell_pair: min(self.bfs(self.bot.position, cell_pair[0]), self.bfs(self.bot.position, cell_pair[1])) for cell_pair in candidate_cells}
-        # Find the closest candidate cell
-        min_distance = math.inf
-        
-        #Breaking ties by distance 
-        # Sort by distance
-        closest_candidates = sorted(candidate_cells, key=lambda cell_pair: distances[cell_pair])
-
-        min_distance = distances[closest_candidates[0]]
-
-        # Filter cells with minimum distance
-        cells_with_min_distance = [cell for cell in closest_candidates if distances[cell] == min_distance]
-        choice  = random.choice(cells_with_min_distance)
-        #print(f"target choice is: {choice}")
-        # calc_dis_one = self.bfs(self.bot.position, choice[0])
-        # calc_dis_two = self.bfs(self.bot.position, choice[1])
-        # if calc_dis_one < calc_dis_two:
-        #     return choice[0]
-        return choice
-    
-    
     def update_probabilities_for_visited(self, visited):
         #print(f"Updating probabilities for visited cell: {visited}")
         total = 0
@@ -657,6 +634,46 @@ class GameManager_Probability:
     
     
     
+    
+    ############################################ strategy 9 ##################################################
+    
+    
+    def choose_next_move_multi_nine(self):
+        # Find the maximum numerical probability
+        max_probability = max(self.probability_grid.values())
+        
+        print(f"Max probability: {max_probability}")
+
+        # Compile a list of cells that have the maximum probability
+        candidate_cells = [
+            key for key, val in self.probability_grid.items() if val == max_probability
+        ]
+        
+        #print(candidate_cells)
+         # Calculate BFS distance once and store it
+        distances = {cell_pair: min(self.bfs(self.bot.position, cell_pair[0]), self.bfs(self.bot.position, cell_pair[1])) for cell_pair in candidate_cells}
+        # Find the closest candidate cell
+        min_distance = math.inf
+        
+        #Breaking ties by distance 
+        # Sort by distance
+        closest_candidates = sorted(candidate_cells, key=lambda cell_pair: distances[cell_pair])
+
+        min_distance = distances[closest_candidates[0]]
+
+        # Filter cells with minimum distance
+        cells_with_min_distance = [cell for cell in closest_candidates if distances[cell] == min_distance]
+        choice  = random.choice(cells_with_min_distance)
+        #print(f"target choice is: {choice}")
+        # calc_dis_one = self.bfs(self.bot.position, choice[0])
+        # calc_dis_two = self.bfs(self.bot.position, choice[1])
+        # if calc_dis_one < calc_dis_two:
+        #     return choice[0]
+        return choice
+    
+    
+    
+    
     def print_ship_state(self):
     # Create a copy of the ship's grid to represent the current state
         ship_state = [[cell for cell in row] for row in self.ship.ship]
@@ -675,7 +692,7 @@ class GameManager_Probability:
             print(' '.join(str(cell) for cell in row))
         print("\n")
      
-    
+    ########################################## Strategy Nine ###################################################
         
     def strategy_nine(self):
         actions = 0
@@ -785,12 +802,6 @@ class GameManager_Probability:
                 elif is_exploring:
                     target = self.find_unvisited_cell()
                     curr_path = self.find_path_to_edge(self.bot.position, target)
-                # if self.bfs(self.bot.position, choice_target[0]) < self.bfs(self.bot.position, choice_target[1]):
-                #     target = choice_target[0]
-                # else:
-                #     target = choice_target[1]
-                # curr_path = self.find_path_to_edge(self.bot.position, target)
-        #print(f"search space is: {search_space}")
         if search_space:
             beep = self.sense_smaller_space()
             actions += 1
@@ -815,9 +826,11 @@ class GameManager_Probability:
             while self.leaks:
                 if curr_path:
                     next_move = curr_path.pop(0)
-                    # self.print_ship_state()
+                    #self.print_ship_state()
                     # i = input("Check state...")
-                    self.bot.move(next_move)
+                    # self.bot.move(next_move)
+                    if self.bot.position == self.leaks[0]:
+                        return actions
                     search_space[choice_target] = 0
                     if next_move in self.leaks:
                         self.leaks.remove(next_move)  # Remove the found leak
@@ -848,7 +861,7 @@ class GameManager_Probability:
                     curr_path = self.find_path_to_edge(self.bot.position, target)
                     #print(f"curr_path is: {curr_path}")
                     #i = input("else in while leaks ....")
-        return actions
+            return actions
     
     
     def sense_smaller_space(self):
@@ -870,28 +883,6 @@ class GameManager_Probability:
         for key in high_prob_cells:
             if nearest_cell in key:
                 return key
-
-        # # Compile a list of cells that have the maximum probability
-        # candidate_cells = [
-        #     key for key, val in search_space.items() if val == max_probability
-        # ]
-        
-        # #print(candidate_cells)
-        #  # Calculate BFS distance once and store it
-        # distances = {cell_pair: min(self.bfs(self.bot.position, cell_pair[0]), self.bfs(self.bot.position, cell_pair[1])) for cell_pair in candidate_cells}
-        # # Find the closest candidate cell
-        # min_distance = math.inf
-        
-        # #Breaking ties by distance 
-        # # Sort by distance
-        # closest_candidates = sorted(candidate_cells, key=lambda cell_pair: distances[cell_pair])
-
-        # min_distance = distances[closest_candidates[0]]
-
-        # # Filter cells with minimum distance
-        # cells_with_min_distance = [cell for cell in closest_candidates if distances[cell] == min_distance]
-        # choice  = random.choice(cells_with_min_distance)
-        # #print(f"target choice is: {choice}")
         return None
         
 
@@ -922,6 +913,9 @@ class GameManager_Probability:
         
     def normalize_search_space(self, search_space):
         total_probability = sum(search_space.values())
+        if total_probability == 0:
+            print(self.leaks)
+            print(self.bot.position)
         #print(f"total probablity in search space: {total_probability}")
         
         for key in search_space:
