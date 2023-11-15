@@ -1,6 +1,5 @@
 from GameManagerDeterministic import GameManager
 from GameManagerProbability import GameManager_Probability
-import matplotlib.pyplot as plt
 import time
 
 NUM_SIMULATIONS_ALPHA = 10
@@ -27,7 +26,10 @@ def main():
            result = game.run_game()  # run_game should return the number of moves
            total_result += result
        averages_k.append(total_result / NUM_SIMULATIONS_K)
-       print(f"Average for alpha={k}: {averages_k[-1]}")
+       print(f"Average for alpha={k}: {averages_k[-1]}"
+             
+    end_time = time.time()  # Record the end time
+    print(f"Total execution time: {end_time - start_time} seconds")
 
 if __name__ == "__main__":
     main()
