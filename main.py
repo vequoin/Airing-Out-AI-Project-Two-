@@ -22,7 +22,7 @@ def main():
     for k in values_of_k:
        total_result = 0
        for i in range(NUM_SIMULATIONS_K):
-           game = GameManager_Probability(50,4, k)
+           game = GameManager(50,4, k)
            result = game.run_game()  # run_game should return the number of moves
            total_result += result
        averages_k.append(total_result / NUM_SIMULATIONS_K)
