@@ -1,5 +1,6 @@
 from bot import Bot
 from Ship import Ship
+import itertools
 import random
 from collections import deque
 
@@ -32,6 +33,8 @@ class GameManagerAlien():
         self.move_pattern = {}
         
         self.intruders = []
+        
+        self.probability_grid = [['#' if cell == 1 else 1/len(self.ship.open_cells) for cell in row] for row in self.ship.ship]
         
         #self.knowledge_grid = [['UNKNOWN' for _ in range(ship_size)] for _ in range(ship_size)]
         self.knowledge_grid = [['#' if cell == 1 else 'UNKNOWN' for cell in row] for row in self.ship.ship]
@@ -193,11 +196,16 @@ class GameManagerAlien():
                         next_target = self.get_next_target_based_on_sensed_data()
                     if not next_target:
                         next_target = self.get_next_target_based_on_movement_pattern(self.move_pattern)
-                    print(next_target)
-                    print(self.bot.position)
-                    self.print_ship_state()
-                    i = input("enter...")
-                    curr_path = self.find_path_to_edge(self.bot.position, next_target)         
+                    if not next_target:
+                        if num_not_detect > num_U*2:
+                            next_target = random.choice(self.ship.open_cells)
+                        else:
+                            curr_path = self.find_path_to_nearest_cell_with_status(self.bot.position, "UNKNOWN")
+                    if not curr_path:
+                        curr_path = self.find_path_to_edge(self.bot.position, next_target)
+                        if not curr_path:
+                            self.print_ship_state()
+                            i = input("Enter...")         
             if curr_path:
                 next_move = curr_path.pop(0)
                 
@@ -264,8 +272,8 @@ class GameManagerAlien():
                     row_str += '. '  # Open space
             print(row_str)
         print("\n")
-
-           
+    
+        
     def bfs(self, start_position, target):
         queue = deque([(start_position, 0)])  # Queue holds tuples of (position, distance)
         visited = set([start_position])
@@ -349,7 +357,9 @@ class GameManagerAlien():
             for j in range(self.ship_length):
                 if self.ship.ship[i][j] != 1:
                     self.probability_grid[i][j] /= total_prob
-    
+
+
+
     
     def run_game(self):
         if self.bot_strategy == 2:
