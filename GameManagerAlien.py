@@ -39,7 +39,7 @@ class GameManagerAlien():
         #self.knowledge_grid = [['UNKNOWN' for _ in range(ship_size)] for _ in range(ship_size)]
         self.knowledge_grid = [['#' if cell == 1 else 'UNKNOWN' for cell in row] for row in self.ship.ship]
         
-        self.initialize_intruders()
+        self.isinturders = self.initialize_intruders()
         
         
     def sense(self):
