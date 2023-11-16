@@ -264,6 +264,91 @@ class GameManagerAlien():
                     row_str += '. '  # Open space
             print(row_str)
         print("\n")
+
+           
+    def bfs(self, start_position, target):
+        queue = deque([(start_position, 0)])  # Queue holds tuples of (position, distance)
+        visited = set([start_position])
+
+        while queue:
+            cell, curr_distance = queue.popleft()
+
+            if cell == target:
+                return curr_distance
+
+            # Add unvisited neighbors to the queue
+            for neighbor in self.ship.get_open_neighbors(cell):
+                if neighbor not in visited:
+                    visited.add(neighbor)
+                    queue.append((neighbor, curr_distance + 1))
+
+        return None
+    
+        
+    def calculate_probability(self, target):
+       # cell is a tuple
+       distance = self.bfs(self.bot.position, target)
+       # Apply the formula given in the specifications
+       if distance == 1:
+           return 1  # If the bot is immediately next to the leak, the probability of receiving a beep is 1
+       else:
+           return math.exp(-self.alpha * (distance - 1))
+       
+        
+        
+    def play_game_four_two(self):
+        actions = 0
+        curr_path = []
+        while self.bot.position != self.intruders[0]:
+            beep_heard = self.sense()
+            self.update_probabilities_intruder(beep_heard)
+            next_target = self.choose_next_move_intruder()
+            curr_path = self.pathfinding_choice_intruder(next_target)
+
+            while curr_path:
+                move = curr_path.pop(0)
+                self.bot.move(move)
+                actions += 1
+                if self.bot.position == self.intruders[0]:
+                    print("Intruder caught!")
+                    return actions
+
+        return actions
+    
+    def pathfinding_choice_intruder(self, target):
+        return self.find_path_to_edge(self.bot.position, target)
+
+
+    def choose_next_move_intruder(self):
+        max_prob = max(max(row) for row in self.probability_grid)
+        candidate_cells = [(i, j) for i in range(self.ship_length) for j in range(self.ship_length) 
+                           if self.probability_grid[i][j] == max_prob]
+
+        # Break ties by choosing the closest cell
+        return min(candidate_cells, key=lambda cell: self.manhattan_distance(self.bot.position, cell))
+
+
+
+    def update_probabilities_intruder(self, beep_heard):
+        for x in range(self.ship_length):
+            for y in range(self.ship_length):
+                cell = (x, y)
+                prob_detect = self.calculate_probability(cell)
+
+                if beep_heard:
+                    self.probability_grid[x][y] *= prob_detect
+                else:
+                    self.probability_grid[x][y] *= (1 - prob_detect)
+
+        self.normalize_probabilities_intruder()
+
+
+    def normalize_probabilities_intruder(self):
+        total_prob = sum(sum(row) for row in self.probability_grid)
+        for i in range(self.ship_length):
+            for j in range(self.ship_length):
+                if self.ship.ship[i][j] != 1:
+                    self.probability_grid[i][j] /= total_prob
     
     
     def run_game(self):
