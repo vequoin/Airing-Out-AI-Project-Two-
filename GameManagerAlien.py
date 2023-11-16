@@ -204,8 +204,7 @@ class GameManagerAlien():
                     if not curr_path:
                         curr_path = self.find_path_to_edge(self.bot.position, next_target)
                         if not curr_path:
-                            self.print_ship_state()
-                            i = input("Enter...")         
+                            isExploring = True     
             if curr_path:
                 next_move = curr_path.pop(0)
                 
@@ -364,4 +363,8 @@ class GameManagerAlien():
     def run_game(self):
         if self.bot_strategy == 2:
             return self.strategy_bot_two()
+        if self.bot_strategy == 4:
+            return self.play_game_four_two()
+        if self.bot.strategy == 9:
+            return 
         
